@@ -1,6 +1,11 @@
+import os
+import os.path as osp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from omegaconf import OmegaConf, DictConfig
+import warnings
+
 
 class RMSNorm(nn.Module):
     def __init__(self, dim, eps=1e-8, apply_to_dim_idx=-1):
@@ -101,7 +106,33 @@ class UNet(nn.Module):
             x = upblock(x)
 
         return self.final_conv(x)
-    
+
+def save_model(model_dir, model_cfg: DictConfig, model):
+    """Save the model to the specified path."""
+    if osp.exists(model_dir):
+        # raise ValueError(f"Model directory {model_dir} already exists!")
+        warnings.warn(f"Model directory {model_dir} already exists! Overwriting.")
+    else:
+        os.makedirs(model_dir, exist_ok=True)
+    torch.save(model.state_dict(), osp.join(model_dir, "model.pth"))
+    with open(osp.join(model_dir, "config.yaml"), "w") as f:
+        f.write(OmegaConf.to_yaml(model_cfg))
+        
+def load_model(model_dir=None, model_cfg: DictConfig=None):
+    """Load the model from the specified path."""
+    if model_cfg is None:
+        model_cfg = OmegaConf.load(osp.join(model_dir, "config.yaml"))
+    model = UNet(
+        in_channels=model_cfg.in_channels,
+        out_channels=model_cfg.out_channels,
+        kernel_size=model_cfg.kernel_size,
+        main_channel=model_cfg.main_channel,
+        depth=model_cfg.depth,
+    )
+    if model_dir is not None:
+        model.load_state_dict(torch.load(osp.join(model_dir, "model.pth")))
+    return model
+
 
 if __name__ == "__main__":
     model = UNet(in_channels=3, out_channels=1, kernel_size=3, main_channel=4, depth=2, spatial_scale_factor=2).cuda()

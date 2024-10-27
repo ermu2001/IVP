@@ -6,16 +6,24 @@ from torch import nn
 import torchvision
 import torchvision.transforms
 import os
-
-
-
 from PIL import Image
 import torchvision.transforms.functional
+
+def resize_with_long_edge(img, long_edge, interpolation=Image.BILINEAR):
+    # Resize the image while maintaining aspect ratio
+    w, h = img.size
+    if w > h:
+        new_w = long_edge
+        new_h = int((h / w) * long_edge)
+    else:
+        new_h = long_edge
+        new_w = int((w / h) * long_edge)
+    return img.resize((new_w, new_h), interpolation)
+
 
 def center_pad(img):
     # Get the size of the image
     w, h = img.size
-    print(img.size)
     # Calculate the size of the new image
     new_w = max(w, h)
     new_h = new_w
@@ -31,13 +39,18 @@ def center_pad(img):
 
 
 class PennFudanDataset(torch.utils.data.Dataset):
-    def __init__(self, root, img_transforms=None, mask_transforms=None):
+    shuffle = True
+    def __init__(self, root, img_transforms=None, mask_transforms=None, split='train'):
         self.root = root
         self.img_transforms = img_transforms
         self.mask_transforms = mask_transforms
         self.imgs = list(sorted(os.listdir(os.path.join(root, "PNGImages"))))
         self.masks = list(sorted(os.listdir(os.path.join(root, "PedMasks"))))
-        self.examine()        
+        self.self_split(split)
+        # Check for mismatches between images and masks         
+        self.examine()
+
+
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.root, "PNGImages", self.imgs[idx])
@@ -52,6 +65,22 @@ class PennFudanDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.imgs)
+
+    def self_split(self, split):
+        if self.shuffle:
+            np.random.RandomState(42).shuffle(self.imgs)
+            np.random.RandomState(42).shuffle(self.masks)
+
+        if split == 'train':
+            self.imgs = self.imgs[:int(len(self.imgs) * 0.8)]
+            self.masks = self.masks[:int(len(self.masks) * 0.8)]
+        elif split == 'val':
+            self.imgs = self.imgs[int(len(self.imgs) * 0.8):int(len(self.masks) * 0.9)]
+            self.masks = self.masks[int(len(self.masks) * 0.8):int(len(self.masks) * 0.9)]
+        elif split == 'test':
+            self.imgs = self.imgs[int(len(self.imgs) * 0.9):]
+            self.masks = self.masks[int(len(self.masks) * 0.9):]
+
 
     def examine(self):
         imgs_from_png = set([img[:12] for img in self.imgs])

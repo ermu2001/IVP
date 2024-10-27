@@ -1,0 +1,32 @@
+output_dir: tmp/output/first
+
+model:
+  in_channels: 3
+  out_channels: 1
+  kernel_size: 3
+  main_channel: 4
+  depth: 2
+
+data:
+  data_root: tmp/data/PennFudanPed
+
+train:
+  batch_size: 16
+  num_epochs: 50
+  num_workers: 4
+  
+  img_size: 32
+
+
+
+  optimizer:
+    cls: torch.optim.Adam
+    kwargs:
+      lr: 0.001
+      weight_decay: 0.0001
+
+  scheduler:
+    cls: torch.optim.lr_scheduler.StepLR
+    kwargs:
+      step_size: 10
+      gamma: 0.1

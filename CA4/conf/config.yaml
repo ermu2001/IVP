@@ -1,32 +1,37 @@
 output_dir: tmp/output/first
+wandb:
+  project: "pedestrian-detection"
+  name: "debug"
 
 model:
   in_channels: 3
   out_channels: 1
   kernel_size: 3
-  main_channel: 4
-  depth: 2
+  main_channel: 8
+  depth: 3
+  spatial_scale_factor: 2
+  channel_scale_factor: 4
 
 data:
   data_root: tmp/data/PennFudanPed
 
 train:
-  batch_size: 16
-  num_epochs: 50
+  batch_size: 8
+  num_epochs: 300
   num_workers: 4
-  
-  img_size: 32
-
+  img_size: 128
+  dtype: bfloat16
+  seed: 42
 
 
   optimizer:
-    cls: torch.optim.Adam
-    kwargs:
-      lr: 0.001
-      weight_decay: 0.0001
+    _target_: torch.optim.Adam
+    lr: 1e-4 # if 1e-3, the model will not converge
+    # weight_decay: 0.0001
 
   scheduler:
-    cls: torch.optim.lr_scheduler.StepLR
-    kwargs:
-      step_size: 10
-      gamma: 0.1
+    _target_: utils.CosineAnnealingWarmupRestarts
+    total_epochs: ${train.num_epochs}
+    warmup_epochs: null
+    min_lr: null # this should be very small, if not, the model will not converge with some randomness, or have more warm up steps
+    max_lr: ${train.optimizer.lr}

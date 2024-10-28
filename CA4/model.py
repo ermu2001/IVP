@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -46,13 +47,19 @@ class DownsampleBlock(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         return self.pool(x)
-    
+
+def upsample(x, spatial_scale_factor):
+    # this function couldn't be performed in bfloat16
+    # there is no deterministic way to do interpolation
+    return F.interpolate(x.float(), scale_factor=spatial_scale_factor, mode='bilinear').to(dtype=x.dtype)
+
 class UpsampleBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, spatial_scale_factor):
         super(UpsampleBlock, self).__init__()
-        self.upsample = lambda x: F.interpolate(x, scale_factor=spatial_scale_factor, mode='bilinear')
+        self.upsample = functools.partial(upsample, spatial_scale_factor=spatial_scale_factor)
         self.conv1 = RetainedShapeConvBlock(in_channels, in_channels, kernel_size)
         self.conv2 = RetainedShapeConvBlock(in_channels, out_channels, kernel_size)
+    
     def forward(self, x):
         x = self.upsample(x)
         x = self.conv1(x)
@@ -68,14 +75,14 @@ class UNet(nn.Module):
             kernel_size,
             main_channel,
             depth,
-            spatial_scale_factor=2
+            spatial_scale_factor=2,
+            channel_scale_factor=4,
         ):
         super(UNet, self).__init__()
         self.in_conv = nn.Conv2d(in_channels, main_channel, kernel_size=1)
         self.unet_downblocks = nn.ModuleList()
         self.unet_midblocks = nn.ModuleList()
         self.unet_upblocks = nn.ModuleList()
-        channel_scale_factor = spatial_scale_factor ** 2
         for i in range(depth):
             self.unet_downblocks.append(DownsampleBlock(main_channel, main_channel * channel_scale_factor, kernel_size, spatial_scale_factor))
             main_channel *= channel_scale_factor
@@ -122,13 +129,10 @@ def load_model(model_dir=None, model_cfg: DictConfig=None):
     """Load the model from the specified path."""
     if model_cfg is None:
         model_cfg = OmegaConf.load(osp.join(model_dir, "config.yaml"))
-    model = UNet(
-        in_channels=model_cfg.in_channels,
-        out_channels=model_cfg.out_channels,
-        kernel_size=model_cfg.kernel_size,
-        main_channel=model_cfg.main_channel,
-        depth=model_cfg.depth,
-    )
+
+
+    dtype = getattr(torch, model_cfg.dtype) if "dtype" in model_cfg else torch.float32
+    model = UNet(**model_cfg).to(dtype=dtype)
     if model_dir is not None:
         model.load_state_dict(torch.load(osp.join(model_dir, "model.pth")))
     return model

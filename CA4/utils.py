@@ -1,8 +1,16 @@
+import random
 import torch
+import numpy as np
 
 def get_device():
     """Get the current device (GPU or CPU)."""
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device('cuda' if torch.cuda.is_available() else "cpu")
+
+def get_dtype(dtype='float32'):
+    """Get the current data type (float32 or float16)."""
+    dtype = dtype.lower()
+    dtype = getattr(torch, dtype)
+    return dtype
 
 def dice_loss(pred_mask, gt_mask):
     """Calculate the Dice loss."""
@@ -17,3 +25,39 @@ def get_iou(pred_masks, masks):
     intersection = (pred_masks & masks).sum(dim=(1, 2))
     union = (pred_masks | masks).sum(dim=(1, 2))
     return (intersection + 1e-6) / (union + 1e-6)  # Add small value to avoid division by zero
+
+def seed_everything(seed, deterministic):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    
+    if deterministic:
+        torch.use_deterministic_algorithms(True, warn_only=True)
+
+class CosineAnnealingWarmupRestarts(torch.optim.lr_scheduler.LambdaLR):
+    def __init__(self, optimizer, warmup_epochs, total_epochs, min_lr=0, max_lr=0.1):
+        self.warmup_epochs = warmup_epochs
+        self.total_epochs = total_epochs
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+        self.cycle_length = total_epochs - warmup_epochs
+        self.current_epoch = 0
+
+        super(CosineAnnealingWarmupRestarts, self).__init__(optimizer, self.get_lr)
+
+    def get_lr(self):
+        if self.current_epoch < self.warmup_epochs:
+            # Linear warmup
+            return [self.min_lr + (self.max_lr - self.min_lr) * (self.current_epoch / self.warmup_epochs) for _ in self.base_lrs]
+        else:
+            # Cosine annealing
+            cosine_decay = 0.5 * (1 + np.cos((self.current_epoch - self.warmup_epochs) / self.cycle_length * 3.141592653589793))
+            return [self.min_lr + (self.max_lr - self.min_lr) * cosine_decay for _ in self.base_lrs]
+
+    def step(self):
+        self.current_epoch += 1
+        super(CosineAnnealingWarmupRestarts, self).step()
+

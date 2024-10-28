@@ -2,10 +2,13 @@ import random
 import torch
 import numpy as np
 
-def get_device():
+def get_device(device=None):
     """Get the current device (GPU or CPU)."""
-    return torch.device('cuda' if torch.cuda.is_available() else "cpu")
-
+    if device is None:
+        return torch.device('cuda' if torch.cuda.is_available() else "cpu")
+    else:
+        return torch.device(device)
+    
 def get_dtype(dtype='float32'):
     """Get the current data type (float32 or float16)."""
     dtype = dtype.lower()

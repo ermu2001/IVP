@@ -30,8 +30,7 @@ from utils import (
 
 logger = logging.getLogger(__name__)
 
-def validate(model, val_dataset, dtype):
-    device = get_device()
+def validate(model, val_dataset, device, dtype):
     model.eval()
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
@@ -104,7 +103,7 @@ def run(cfg):
     else:
         scheduler = None
     loss_fn = dice_loss
-    device = get_device()
+    device = get_device(cfg.train.device)
     dtype = get_dtype(cfg.train.dtype)
     model.to(device=device, dtype=dtype)
     for epoch in range(cfg.train.num_epochs):
@@ -126,7 +125,7 @@ def run(cfg):
             cur_lr = scheduler.get_lr()[0]
         else:
             cur_lr = cfg.train.optimizer.lr    
-        val_iou, val_dice_score = validate(model, val_dataset, dtype)
+        val_iou, val_dice_score = validate(model, val_dataset, device, dtype)
 
         save_model(osp.join(cfg.output_dir, f'epoch{epoch:05}'), cfg.model, model)
         logger.info(f"""Epoch [{epoch}/{cfg.train.num_epochs}],

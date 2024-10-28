@@ -21,6 +21,7 @@ train:
   num_workers: 4
   img_size: 128
   dtype: bfloat16
+  device: cuda
   seed: 42
 
 

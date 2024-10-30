@@ -64,6 +64,8 @@ def run(cfg):
 
     img_transform = torchvision.transforms.Compose([
         torchvision.transforms.Lambda(lambda x: resize_with_long_edge(x, cfg.train.img_size)),
+        torchvision.transforms.ColorJitter(0.1, 0.1, 0.1, 0.1),
+        torchvision.transforms.RandomAdjustSharpness(0.1, p=0.5),
         torchvision.transforms.Lambda(center_pad),
         torchvision.transforms.ToTensor(),
     ])

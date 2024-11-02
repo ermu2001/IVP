@@ -26,6 +26,7 @@ from utils import (
     dice_loss,
     get_iou,
     seed_everything,
+    compute_dice_score,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ def validate(model, val_dataset, device, dtype):
     )
     ious = []
     dice_scores = []
+    soft_dice_losses = []
     with torch.no_grad():
         for images, masks in tqdm(val_loader, leave=False):
             images = images.to(device, dtype=dtype)
@@ -47,11 +49,13 @@ def validate(model, val_dataset, device, dtype):
             outputs = model(images)
             pred_masks = outputs > 0
             ious.extend(get_iou(pred_masks, masks).tolist())
-            dice_scores.append(1 - dice_loss(pred_masks, masks).tolist())
+            soft_dice_losses.append(dice_loss(outputs.sigmoid(), masks).tolist())
+            dice_scores.append(compute_dice_score(pred_masks, masks).tolist())
     ious = np.mean(ious)
     dice_scores = np.mean(dice_scores)
+    soft_dice_losses = np.mean(soft_dice_losses)
     # Add validation metrics here
-    return ious, dice_scores
+    return ious, dice_scores, soft_dice_losses
 
 def run(cfg):
     wandb.init(project=cfg.wandb.project, config=OmegaConf.to_container(cfg, resolve=True), name=cfg.wandb.name)
@@ -127,20 +131,20 @@ def run(cfg):
             cur_lr = scheduler.get_lr()[0]
         else:
             cur_lr = cfg.train.optimizer.lr    
-        val_iou, val_dice_score = validate(model, val_dataset, device, dtype)
+        val_iou, val_dice_score, val_dice_loss = validate(model, val_dataset, device, dtype)
 
         save_model(osp.join(cfg.output_dir, f'epoch{epoch:05}'), cfg.model, model)
         logger.info(f"""Epoch [{epoch}/{cfg.train.num_epochs}],
                       Train Loss: {np.mean(epoch_losses):.4f},
                       Validation IoU: {val_iou:.4f},
                       Validation Dice Score: {val_dice_score:.4f},
-                      Validation Dice Loss: {1 - val_dice_score:.4f},
+                      Validation Dice Loss: {val_dice_loss:.4f},
                       Learning Rate: {cur_lr:.6f}""")
         wandb.log({
             'epoch_train_loss': np.mean(epoch_losses),
             'epoch_val_iou': val_iou,
             'epoch_val_dice_score': val_dice_score,
-            'epoch_val_dice_loss': 1 - val_dice_score,
+            'epoch_val_dice_loss': val_dice_loss,
             'epoch_learning_rate': cur_lr,
         })
 

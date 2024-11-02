@@ -40,6 +40,12 @@ def seed_everything(seed, deterministic):
     if deterministic:
         torch.use_deterministic_algorithms(True, warn_only=True)
 
+
+def compute_dice_score(pred_mask, true_mask):
+    intersection = torch.sum(pred_mask * true_mask)
+    return (2. * intersection) / (torch.sum(pred_mask) + torch.sum(true_mask))
+
+
 class CosineAnnealingWarmupRestarts(torch.optim.lr_scheduler.LambdaLR):
     def __init__(self, optimizer, warmup_epochs, total_epochs, min_lr=0, max_lr=0.1):
         self.warmup_epochs = warmup_epochs
